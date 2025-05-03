@@ -1,0 +1,19 @@
+[[source]]
+name = "pypi"
+url = "https://pypi.org/simple"
+verify_ssl = true
+
+[dev-packages]
+
+[packages]
+numpy = "*"
+python-rtmidi = "*"
+scipy = "*"
+pyqt5 = "*"
+pyqtgraph = "*"
+events = "*"
+pyinstaller = "*"
+py2exe = "*"
+
+[requires]
+python_version = "3.7"

@@ -1,0 +1,107 @@
+# Write n=label to select hardware channel number n (starting from 1)
+# and attach a label to it. This will show up in the Fieldtrip buffer
+# and the GDF file.
+# Currently, there is no check for double inclusion of channels.
+# That is, if you define 1=FOO and 1=BAR, the first hardware channel
+# will show up twice, with different names.
+# Channels listed before the first [save] or [stream] line will be added
+# to both saving and streaming selections. Write [select] to enable
+# selection for both saving and streaming.
+[select]
+#33=ExGBip1
+#41=Digi
+#
+#
+1=C3
+2=FC1
+3=FC2
+4=C4
+5=CP2
+6=Pz
+7=CP1
+8=Cz
+9=O1
+10=Oz
+11=O2
+#41=Digi
+#9=FC5
+#10=FC1
+#11=FC2
+#12=FC6
+#13=M1
+#14=T7
+#15=C3
+#16=Cz
+#17=C4
+#18=T8
+#19=M2
+#20=CP5
+#21=CP1
+#22=CP2
+#23=CP6
+#24=P7
+#25=P3
+#26=Pz
+#27=P4
+#28=P8
+#29=POz
+#30=O1
+#31=Oz
+#32=O2
+#33=AF7
+#34=AF3
+#35=AF4
+#36=AF8
+#37=F5
+#38=F1
+#39=F2
+#40=F6
+#41=FC3
+#42=FCz
+#43=FC4
+#44=C5
+#45=C1
+#46=C2
+#47=C6
+#48=CP3
+#49=CPz
+#50=CP4
+#51=P5
+#52=P1
+#53=P2
+#54=P6
+#55=PO5
+#56=PO3
+#57=PO4
+#58=PO6
+#59=FT7
+#60=FT8
+#61=TP7
+#62=TP8
+#63=PO7
+#64=PO8
+#65=BIP1
+#66=BIP2
+#67=BIP3
+#68=BIP4
+#69=AUX1
+#70=AUX2
+#71=AUX3
+#72=AUX4
+#73=Digi
+
+# Please take note that the channels will be written out in the order specified here,
+# that is, they will not be sorted according to the hardware channel number!
+
+# Write "downsample X" with a positive number X to set the downsampling
+# factor for streaming. The GDF file will receive full-rate data.
+# Assuming the sampling rate of the TMSI device is 5Khz, downsample to
+# 1 KHz (5x) with a 4-th order Butterworth lowpass @ 250 Hz
+# downsample=5
+# bandwidth=250
+# bworder=4
+
+# Adjust sample rate
+samplerate=512
+
+
