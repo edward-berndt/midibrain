@@ -103,7 +103,7 @@
                     </size>
                 </property>
           <property name="text">
-           <string>Alle</string>
+           <string>All</string>
           </property>
           <property name="checked">
            <bool>true</bool>
@@ -413,7 +413,7 @@
                                </font>
                            </property>
                            <property name="text">
-                               <string>FieldTrip Status:</string>
+                               <string>FieldTrip status:</string>
                            </property>
                        </widget>
                    </item>
@@ -434,7 +434,7 @@
                    <item row="2" column="0">
                        <widget class="QLabel" name="status_channels_label_head">
                            <property name="text">
-                               <string>Kanäle:</string>
+                               <string>Channels:</string>
                            </property>
                        </widget>
                    </item>
@@ -460,7 +460,7 @@
                                </size>
                            </property>
                            <property name="text">
-                               <string>Nicht verbunden</string>
+                               <string>Not connected</string>
                            </property>
                        </widget>
                    </item>
@@ -509,7 +509,7 @@
            </font>
           </property>
           <property name="text">
-           <string>Alpha zuweisen</string>
+           <string>Assign Alpha</string>
           </property>
           <property name="checkable">
            <bool>true</bool>
@@ -562,7 +562,7 @@
            </font>
           </property>
           <property name="text">
-           <string>Beta zuweisen</string>
+           <string>Assign Beta</string>
           </property>
           <property name="checkable">
            <bool>true</bool>
@@ -600,7 +600,7 @@
          </font>
         </property>
         <property name="text">
-         <string>Kalibrieren</string>
+         <string>Calibrate</string>
         </property>
        </widget>
       </item>
@@ -640,10 +640,10 @@
          </font>
         </property>
         <property name="toolTip">
-         <string>Bestimmt die Schrittweite des Fensters bei der Signalverarbeitung</string>
+         <string>The step size of the moving-average window</string>
         </property>
         <property name="text">
-         <string>Schrittweite</string>
+         <string>Stepsize</string>
         </property>
         <property name="alignment">
          <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
@@ -668,7 +668,7 @@
                <bool>false</bool>
            </property>
         <property name="suffix">
-         <string> Blockgröße</string>
+         <string> Blocklength</string>
         </property>
         <property name="prefix">
          <string>1/</string>
@@ -689,7 +689,7 @@
               <item>
                   <widget class="QLabel" name="label">
                       <property name="text">
-                          <string>Werte pro Sekunde:</string>
+                          <string>Values per second:</string>
                       </property>
                   </widget>
               </item>
@@ -714,12 +714,10 @@
                      </font>
                  </property>
                  <property name="toolTip">
-                     <string>Anzahl der letzten berechneten Alpha-/Betawerte, die für den gleitenden Mittelwert
-                         berücksichtigt werden
-                     </string>
+                     <string>Number of Alpha/Beta values, that are used for the calculation of the moving average</string>
                  </property>
                  <property name="text">
-                     <string>Gleitender Mittelwert</string>
+                     <string>Moving average</string>
                  </property>
                  <property name="alignment">
                      <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
@@ -772,7 +770,7 @@
                      </sizepolicy>
                  </property>
                  <property name="text">
-                     <string>Anwenden</string>
+                     <string>Apply</string>
                  </property>
        </widget>
       </item>
@@ -816,16 +814,16 @@
      <height>21</height>
     </rect>
    </property>
-   <widget class="QMenu" name="menuDatei">
+   <widget class="QMenu" name="menuFile">
     <property name="title">
-     <string>Datei</string>
+     <string>File</string>
     </property>
        <addaction name="item_save"/>
        <addaction name="item_open"/>
    </widget>
-   <widget class="QMenu" name="menuKonfiguration">
+   <widget class="QMenu" name="menuConfiguration">
     <property name="title">
-     <string>Konfiguration</string>
+     <string>Configuration</string>
     </property>
        <addaction name="ft_item"/>
    </widget>
@@ -834,8 +832,8 @@
      <string>Info</string>
     </property>
    </widget>
-   <addaction name="menuDatei"/>
-   <addaction name="menuKonfiguration"/>
+   <addaction name="menuFile"/>
+   <addaction name="menuConfiguration"/>
    <addaction name="menuInfo"/>
   </widget>
   <widget class="QStatusBar" name="statusbar">
@@ -848,7 +846,7 @@
   </widget>
      <action name="item_save">
    <property name="text">
-    <string>Aufnahmen speichern</string>
+    <string>Save recording</string>
    </property>
          <property name="shortcut">
              <string>Ctrl+S</string>
@@ -856,7 +854,7 @@
   </action>
      <action name="item_open">
    <property name="text">
-    <string>Aufnamen öffnen</string>
+    <string>Replay recording</string>
    </property>
          <property name="shortcut">
              <string>Ctrl+O</string>
@@ -864,7 +862,7 @@
   </action>
      <action name="ft_item">
    <property name="text">
-    <string>FieldTrip Verbindung</string>
+    <string>FieldTrip connection</string>
    </property>
   </action>
  </widget>

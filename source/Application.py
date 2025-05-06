@@ -1,6 +1,7 @@
 import sys
 import threading
 import winsound
+import os
 
 import numpy as np
 import pyqtgraph as pg
@@ -64,7 +65,7 @@ def on_connection_changed(is_conn):
 def show_dialog(text):
     box = QMessageBox()
     box.setText(text)
-    box.setWindowTitle("BCI to MIDI")
+    box.setWindowTitle("MIDIBrain")
     box.setStandardButtons(QMessageBox.Ok)
     box.exec_()
 
@@ -101,11 +102,11 @@ def update_progbar(val):
 def save_data():
     stop_processing()
     data = proc.raw_data
-    name = QFileDialog.getSaveFileName(gui, "Aufnahme speichern", filter='Text File (*.csv)',
+    name = QFileDialog.getSaveFileName(gui, "Save recording", filter='Text File (*.csv)',
                                        initialFilter='Text File (*.csv)')[0]
     if name:
         np.savetxt(name, data, header=str(proc.sfreq), delimiter=",")
-    show_dialog('Erfolgreich gespeichert')
+    show_dialog('Successfully saved!')
 
 
 def load_data():
@@ -124,8 +125,8 @@ def init_graph():
     beta_graph.setBackground('w')
     al.insertWidget(0, alpha_graph, 8)
     bl.insertWidget(0, beta_graph, 8)
-    alpha_graph.getPlotItem().setTitle("Alphastärke")
-    beta_graph.getPlotItem().setTitle("Betastärke")
+    alpha_graph.getPlotItem().setTitle("Alpha waves")
+    beta_graph.getPlotItem().setTitle("Beta waves")
     alpha_plot["raw"] = alpha_graph.getPlotItem().plot(pen=QColor(155, 155, 155), width=10)
     alpha_plot["averaged"] = alpha_graph.getPlotItem().plot(pen='b', width=10)
     beta_plot["raw"] = beta_graph.getPlotItem().plot(pen=QColor(155, 155, 155), width=50)
@@ -229,9 +230,9 @@ def on_connect():
 def connect():
     try:
         proc.connect(host_name, port_nr)
-        ft_gui.connect_button.setText('Trennen')
+        ft_gui.connect_button.setText('Disconnect')
     except IOError:
-        show_dialog('Verbindung mit Fieldtrip gescheitert')
+        show_dialog('Connection to FieldTrip failed')
 
 
 @pyqtSlot()
@@ -290,11 +291,11 @@ def on_beta_map():
 def update_labels():
     global gui, proc
     if proc.is_connected():
-        gui.status_fieldtrip_label.setText('Verbunden')
+        gui.status_fieldtrip_label.setText('Connected')
         gui.status_sfreq_label.setText(str(int(proc.sfreq)))
         gui.status_channels_label.setText(str(proc.n_channels))
     else:
-        gui.status_fieldtrip_label.setText('Nicht verbunden')
+        gui.status_fieldtrip_label.setText('Not Connected')
         gui.status_sfreq_label.setText('-')
         gui.status_channels_label.setText('-')
     gui.val_per_sec_label.setText(str(proc.get_vals_per_sec()))
@@ -336,9 +337,10 @@ def init_menubar():
 def main():
     global app, gui, cal_gui, ft_gui, proc
     app = QApplication(sys.argv)
-    gui = loadUi("view/main.ui")
-    cal_gui = loadUi("view/calibration.ui")
-    ft_gui = loadUi("view/fieldtrip_dialog.ui")
+    dir_path = os.path.dirname(os.path.realpath(__file__))
+    gui = loadUi(dir_path + "/view/main.ui")
+    cal_gui = loadUi(dir_path + "/view/calibration.ui")
+    ft_gui = loadUi(dir_path + "/view/fieldtrip_dialog.ui")
     gui.show()
     proc = Processing()
     proc.new_values_event.on_change += on_new_values
@@ -346,7 +348,7 @@ def main():
     try:
         midi.open_midi_port()
     except InvalidPortError:
-        show_dialog("Es konnte kein MIDI-Port geöffnet werden. Bitte installieren Sie den LoopBe1 MIDI-Treiber")
+        show_dialog("MIDI port could not be opened. Please install the LoopBe1 MIDI driver.")
     init_buttons()
     init_menubar()
     init_channel_boxes()

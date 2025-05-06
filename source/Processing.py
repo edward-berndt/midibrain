@@ -2,7 +2,7 @@ import numpy as np
 from PyQt5.QtCore import QThread, pyqtSignal
 from events import Events
 from scipy import signal
-from scipy.integrate import simps
+from scipy.integrate import simpson
 
 import FieldTrip
 
@@ -75,7 +75,7 @@ class Processing:
             raise
         header = self.__ftc.getHeader()
         if header is None:
-            raise IOError("Verbindung zu FieldTrip fehlgeschlagen: kein Header")
+            raise IOError("Connection to FieldTrip failed: no Header")
         self.sfreq = header.fSample
         self.block_size = self.sfreq
         self.n_channels = header.nChannels
@@ -179,7 +179,7 @@ class Processing:
             freq_res = x[:, i].size / self.sfreq
             freqs, psd = self.get_psd(x[:, i])
             band = np.logical_and(freqs >= lo, freqs <= up)
-            power = simps(y=psd[band], dx=freq_res, axis=0)
+            power = simpson(y=psd[band], dx=freq_res, axis=0)
             powers = np.append(powers, power)
         mean_power = np.mean(powers)
         return mean_power
