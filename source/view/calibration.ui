@@ -32,7 +32,7 @@
             </size>
         </property>
         <property name="windowTitle">
-            <string>Kalibrierung - MidiBrain</string>
+            <string>Calibration - MIDIBrain</string>
         </property>
         <property name="modal">
             <bool>true</bool>
@@ -67,11 +67,10 @@
                                         <number>1</number>
                                     </property>
                                     <property name="text">
-                                        <string>Bei der Kalibrierung werden die Ober- und Untergrenzen für die Stärke
-                                            der Alpha und Beta Wellen berechnet. Die Kalibrierung beginnt, nachdem sie
-                                            auf den jeweiligen Knopf gedrückt haben und dauert für die Alpha und Beta
-                                            Wellen jeweils eine Minute. Nach Abschluss der Kalibrierungsvorgangs ertönt
-                                            ein Geräusch.
+                                        <string>
+                                        The calibration process calculates the lower and upper limits of the Alpha and Beta waves.
+                                        The calibration for each band (Alpha or Beta) starts as soon as you press the respective button and takes one minute.
+                                        Upon completion of the calibration you will hear a sound.
                                         </string>
                                     </property>
                                     <property name="textFormat">
@@ -140,8 +139,8 @@
                                         </sizepolicy>
                                     </property>
                                     <property name="text">
-                                        <string>Schließen Sie ihre Augen und entspannen sie sich, ohne an etwas
-                                            bestimmtes zu denken
+                                        <string>
+                                        Close your eyes and relax, without thinking about anything particular
                                         </string>
                                     </property>
                                     <property name="textFormat">
@@ -164,7 +163,7 @@
                                         </sizepolicy>
                                     </property>
                                     <property name="text">
-                                        <string>Alpha Wellen kalibrieren</string>
+                                        <string>Calibrate Alpha waves</string>
                                     </property>
                                     <property name="autoDefault">
                                         <bool>false</bool>
@@ -190,8 +189,9 @@
                                         </sizepolicy>
                                     </property>
                                     <property name="text">
-                                        <string>Lassen Sie ihre Augen geöffnet und gehen Sie das Alphabet rückwärts
-                                            durch oder konzentrieren Sie sich auf etwas bestimtes
+                                        <string>
+                                        Keep your eyes open this time and try to really focus on something.
+                                        E.g. count the alphabet backwards.
                                         </string>
                                     </property>
                                     <property name="textFormat">
@@ -214,7 +214,7 @@
                                         </sizepolicy>
                                     </property>
                                     <property name="text">
-                                        <string>Beta Wellen kalibrieren</string>
+                                        <string>Calibrate Beta waves</string>
                                     </property>
                                     <property name="autoDefault">
                                         <bool>false</bool>
