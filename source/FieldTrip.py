@@ -7,56 +7,56 @@ FieldTrip buffer (V1) client in pure Python
 # We need socket, struct, and numpy
 import socket
 import struct
-
 import numpy
+import unicodedata
 
 VERSION = 1
 
-PUT_HDR = 0x0101
-PUT_DAT = 0x0102
-PUT_EVT = 0x0103
-PUT_OK = 0x0104
-PUT_ERR = 0x0105
-GET_HDR = 0x0201
-GET_DAT = 0x0202
-GET_EVT = 0x0203
-GET_OK = 0x0204
-GET_ERR = 0x0205
-FLUSH_HDR = 0x0301
-FLUSH_DAT = 0x0302
-FLUSH_EVT = 0x0303
-FLUSH_OK = 0x0304
-FLUSH_ERR = 0x0305
-WAIT_DAT = 0x0402
-WAIT_OK = 0x0404
-WAIT_ERR = 0x0405
+PUT_HDR            = 0x0101
+PUT_DAT            = 0x0102
+PUT_EVT            = 0x0103
+PUT_OK             = 0x0104
+PUT_ERR            = 0x0105
+GET_HDR            = 0x0201
+GET_DAT            = 0x0202
+GET_EVT            = 0x0203
+GET_OK             = 0x0204
+GET_ERR            = 0x0205
+FLUSH_HDR          = 0x0301
+FLUSH_DAT          = 0x0302
+FLUSH_EVT          = 0x0303
+FLUSH_OK           = 0x0304
+FLUSH_ERR          = 0x0305
+WAIT_DAT           = 0x0402
+WAIT_OK            = 0x0404
+WAIT_ERR           = 0x0405
 PUT_HDR_NORESPONSE = 0x0501
 PUT_DAT_NORESPONSE = 0x0502
 PUT_EVT_NORESPONSE = 0x0503
 
-DATATYPE_CHAR = 0
-DATATYPE_UINT8 = 1
-DATATYPE_UINT16 = 2
-DATATYPE_UINT32 = 3
-DATATYPE_UINT64 = 4
-DATATYPE_INT8 = 5
-DATATYPE_INT16 = 6
-DATATYPE_INT32 = 7
-DATATYPE_INT64 = 8
+DATATYPE_CHAR    = 0
+DATATYPE_UINT8   = 1
+DATATYPE_UINT16  = 2
+DATATYPE_UINT32  = 3
+DATATYPE_UINT64  = 4
+DATATYPE_INT8    = 5
+DATATYPE_INT16   = 6
+DATATYPE_INT32   = 7
+DATATYPE_INT64   = 8
 DATATYPE_FLOAT32 = 9
 DATATYPE_FLOAT64 = 10
 DATATYPE_UNKNOWN = 0xFFFFFFFF
 
-CHUNK_UNSPECIFIED = 0
-CHUNK_CHANNEL_NAMES = 1
-CHUNK_CHANNEL_FLAGS = 2
-CHUNK_RESOLUTIONS = 3
-CHUNK_ASCII_KEYVAL = 4
-CHUNK_NIFTI1 = 5
-CHUNK_SIEMENS_AP = 6
-CHUNK_CTF_RES4 = 7
-CHUNK_NEUROMAG_FIF = 8
-CHUNK_NEUROMAG_ISOTRAK = 9
+CHUNK_UNSPECIFIED        = 0
+CHUNK_CHANNEL_NAMES      = 1
+CHUNK_CHANNEL_FLAGS      = 2
+CHUNK_RESOLUTIONS        = 3
+CHUNK_ASCII_KEYVAL       = 4
+CHUNK_NIFTI1             = 5
+CHUNK_SIEMENS_AP         = 6
+CHUNK_CTF_RES4           = 7
+CHUNK_NEUROMAG_FIF       = 8
+CHUNK_NEUROMAG_ISOTRAK   = 9
 CHUNK_NEUROMAG_HPIRESULT = 10
 
 # List for converting FieldTrip datatypes to Numpy datatypes
@@ -80,7 +80,7 @@ def serialize(A):
 
     if isinstance(A, numpy.ndarray):
         dt = A.dtype
-        if not (dt.isnative) or dt.num < 1 or dt.num >= len(dataType):
+        if not(dt.isnative) or dt.num < 1 or dt.num >= len(dataType):
             return (DATATYPE_UNKNOWN, None)
 
         ft = dataType[dt.num]
@@ -89,11 +89,11 @@ def serialize(A):
 
         if A.flags['C_CONTIGUOUS']:
             # great, just use the array's buffer interface
-            return (ft, str(A.data))
+            return (ft, A.tostring())
 
         # otherwise, we need a copy to C order
         AC = A.copy('C')
-        return (ft, str(AC.data))
+        return (ft, AC.tostring())
 
     if isinstance(A, int):
         return (DATATYPE_INT32, struct.pack('i', A))
@@ -113,6 +113,7 @@ class Chunk:
 
 
 class Header:
+
     """Class for storing header information in the FieldTrip buffer format"""
 
     def __init__(self):
@@ -212,6 +213,7 @@ class Event:
 
 
 class Client:
+
     """Class for managing a client connection to a FieldTrip buffer."""
 
     def __init__(self):
@@ -237,7 +239,7 @@ class Client:
 
     def sendRaw(self, request):
         """Send all bytes of the string 'request' out to socket."""
-        if not (self.isConnected):
+        if not(self.isConnected):
             raise IOError('Not connected to FieldTrip buffer')
 
         N = len(request)
@@ -330,16 +332,18 @@ class Client:
     def putHeader(self, nChannels, fSample, dataType, labels=None,
                   chunks=None, reponse=True):
         haveLabels = False
-        extras = ''
+        extras = b''
 
-        if (type(labels) == list) and (len(labels) == 0):
-            labels = None
+        if (type(labels)==list) and (len(labels)==0):
+            labels=None
 
-        if not (labels is None):
-            serLabels = ''
+        if not(labels is None):
+            serLabels = b''
+            for n in range(0, nChannels):
+                # ensure that labels are ascii strings, not unicode
+                serLabels += labels[n].encode('ascii', 'ignore') + b'\0'
             try:
-                for n in range(0, nChannels):
-                    serLabels += labels[n] + '\0'
+                pass
             except:
                 raise ValueError('Channels names (labels), if given,'
                                  ' must be a list of N=numChannels strings')
@@ -348,7 +352,7 @@ class Client:
                                  len(serLabels)) + serLabels
             haveLabels = True
 
-        if not (chunks is None):
+        if not(chunks is None):
             for chunk_type, chunk_data in chunks:
                 if haveLabels and chunk_type == CHUNK_CHANNEL_NAMES:
                     # ignore channel names chunk in case we got labels
@@ -461,7 +465,7 @@ class Client:
             buf = ''
             num = 0
             for e in E:
-                if not (isinstance(e, Event)):
+                if not(isinstance(e, Event)):
                     raise 'Element %i in given list is not an Event' % num
                 buf = buf + e.serialize()
                 num = num + 1
@@ -486,9 +490,10 @@ class Client:
         buffer.
         """
 
-        if not (isinstance(D, numpy.ndarray)) or len(D.shape) != 2:
+        if not(isinstance(D, numpy.ndarray)) or len(D.shape) != 2:
             raise ValueError(
                 'Data must be given as a NUMPY array (samples x channels)')
+
         nSamp = D.shape[0]
         nChan = D.shape[1]
 
@@ -534,7 +539,6 @@ class Client:
 
         return struct.unpack('II', resp_buf[0:8])
 
-
 if __name__ == "__main__":
     # Just a small demo for testing purposes...
     # This should be moved to a separate file at some point
@@ -549,8 +553,8 @@ if __name__ == "__main__":
         try:
             port = int(sys.argv[2])
         except:
-            print('Error: second argument (%s) must be a valid (=integer)'
-                  ' port number' % sys.argv[2])
+            print(('Error: second argument (%s) must be a valid (=integer)'
+                   ' port number' % sys.argv[2]))
             sys.exit(1)
 
     ftc = Client()
@@ -569,7 +573,7 @@ if __name__ == "__main__":
 
         if H.nSamples > 0:
             print('\nTrying to read last sample...')
-            index = (H.nSamples - 1)
+            index = H.nSamples - 1
             D = ftc.getData([index, index])
             print(D)
 

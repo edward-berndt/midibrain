@@ -102,7 +102,7 @@ def update_progbar(val):
 def save_data():
     stop_processing()
     data = proc.raw_data
-    name = QFileDialog.getSaveFileName(gui, "Save recording", filter='Text File (*.csv)',
+    name = QFileDialog.getSaveFileName(gui, "Save recorded EEG data", filter='Text File (*.csv)',
                                        initialFilter='Text File (*.csv)')[0]
     if name:
         np.savetxt(name, data, header=str(proc.sfreq), delimiter=",")
@@ -111,7 +111,10 @@ def save_data():
 
 def load_data():
     # TODO: implement data loading
-    pass
+    file_name = QFileDialog.getOpenFileName(gui, "Open recorded EEG data", filter='Text File (*.csv)', initialFilter='Text File (*.csv)')[0]
+    if name:
+        np.genfromtxt(file_name)
+    
 
 
 def init_graph():
@@ -220,7 +223,7 @@ def on_connect():
     global host_name, port_nr
     if proc.is_connected():
         proc.disconnect()
-        ft_gui.connect_button.setText('Verbinden')
+        ft_gui.connect_button.setText('Connect')
     else:
         host_name = ft_gui.hostname_input.text()
         port_nr = int(ft_gui.portnr_input.text())
@@ -238,7 +241,7 @@ def connect():
 @pyqtSlot()
 def on_start():
     global gui, proc, processing_thread
-    if proc_run.isSet():
+    if proc_run.is_set():
         stop_processing()
     else:
         start_processing()

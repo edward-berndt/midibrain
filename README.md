@@ -18,3 +18,5 @@ You can download it (free for personal use) here: https://nerds.de/en/download.h
 ### MacOS
 So far, MIDIBrain has only been tested on Windows Machines. Hence, only `.exe`s are provided in this repository. You can check out the source code and try to get it to work on your MacOS device though!
 
+This software uses the FieldTrip buffer open source library. See http:/www.fieldtriptoolbox.org for details.
+The FieldTrip buffer is used under the GNU-GPL License, Version 3.

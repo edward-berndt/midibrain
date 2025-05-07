@@ -37,7 +37,7 @@ class Processing:
         self.cal_alpha = np.array([])
         self.cal_beta = np.array([])
 
-        # min and max values of the alpha and beta power due to calibration
+        # min and max values of the alpha and beta power determined during calibration
         self.alpha_min = 0
         self.alpha_max = 1
         self.beta_min = 0
@@ -222,7 +222,7 @@ class Processing:
             raw_beta_power = self.get_band_power(d, 14, 27)
 
             raw_alphas = np.append(raw_alphas, raw_alpha_power)
-            raw_betas = np.append(raw_betas, raw_beta_power)
+            raw_betas = np.append(raw_betas, raw_beta_power) 
 
             av_alpha_power = np.mean(raw_alphas[-self._average:])
             av_beta_power = np.mean(raw_betas[-self._average:])
