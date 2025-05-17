@@ -20,7 +20,7 @@ class Processing:
         self.block_size = 512
         self.sample_n = 0
         self.n_channels = 0
-        self.picked_channels = np.array([], dtype=int)
+        self.active_channels = np.array([], dtype=int)
 
         # general Processing variables
         self._glide = 1
@@ -53,7 +53,7 @@ class Processing:
         self.block_size = 512
         self.sample_n = 0
         self.n_channels = 0
-        self.picked_channels = np.array([], dtype=int)
+        self.active_channels = np.array([], dtype=int)
 
     def clear_vals(self):
         self.raw_alphas = np.array([])
@@ -68,7 +68,6 @@ class Processing:
         :param port: port number
         :return: True if connection was successful, False if not
         """
-        connected = False
         try:
             self.__ftc.connect(name, port)  # might throw IOError
         except IOError:
@@ -109,23 +108,25 @@ class Processing:
         if len(chans) > self.n_channels:
             raise ValueError('There are only ' + str(self.n_channels) + ' channels')
         elif len(chans) == 0:
-            self.picked_channels = chans
+            self.active_channels = chans
         elif max(chans) >= self.n_channels or min(chans) < 0:
             raise ValueError('Values for chans must be within range from 0 to ' + str(self.n_channels - 1))
         else:
-            self.picked_channels = chans
+            self.active_channels = chans
+            self.recalibrate()
+        print('active channels: ' + str(self.active_channels))
 
     def activate_channel(self, chan_nr):
         if chan_nr >= self.n_channels or chan_nr < 0:
             raise ValueError('Values for chans must be within range from 0 to ' + str(self.n_channels - 1))
         else:
-            chans = np.append(self.picked_channels, int(chan_nr))
+            chans = np.append(self.active_channels, int(chan_nr))
             chans = np.unique(chans)
             self.set_active_channels(chans)
 
     def deactivate_channel(self, chan_nr):
-        i = np.argwhere(self.picked_channels == chan_nr)
-        chans = np.delete(self.picked_channels, i)
+        i = np.argwhere(self.active_channels == chan_nr)
+        chans = np.delete(self.active_channels, i)
         self.set_active_channels(chans)
 
     def is_connected(self):
@@ -172,10 +173,10 @@ class Processing:
         :param up: upper limit of the band
         :return: the band power
         """
-        if len(self.picked_channels) == 0:
+        if len(self.active_channels) == 0:
             return np.array([])
         powers = np.array([])
-        for i in self.picked_channels:
+        for i in self.active_channels:
             freq_res = x[:, i].size / self.sfreq
             freqs, psd = self.get_psd(x[:, i])
             band = np.logical_and(freqs >= lo, freqs <= up)
@@ -217,7 +218,7 @@ class Processing:
         raw_beta_power = None
         av_alpha_power = None
         av_beta_power = None
-        if len(self.picked_channels) != 0 and len(d[:, 0]) >= self.block_size:
+        if len(self.active_channels) != 0 and len(d[:, 0]) >= self.block_size:
             raw_alpha_power = self.get_band_power(d, 8, 13)
             raw_beta_power = self.get_band_power(d, 14, 27)
 
@@ -280,6 +281,11 @@ class Processing:
         if len(av_betas) != 0:
             self.beta_max = max(av_betas)
             self.beta_min = min(av_betas)
+
+    def calibrate_from_recording(self, data):
+        self.cal_alpha = data
+        self.cal_beta = data
+        self.recalibrate()       
 
 
 class CalibrationThread(QThread):

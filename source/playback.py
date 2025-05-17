@@ -2,6 +2,11 @@ import time
 import numpy as np
 import pandas as pd
 import FieldTrip
+from events import Events
+
+"""
+Author: Edward Berndt
+"""
 
 class EEGPlayback:
     def __init__(self, csv_path, host='localhost', port=1972):
@@ -9,6 +14,7 @@ class EEGPlayback:
         self.host = host
         self.port = port
         self.__ftc = FieldTrip.Client()
+        self.playback_finished = Events()
 
     def load_data(self):
         with open(self.csv_path, 'r') as f:
@@ -36,22 +42,30 @@ class EEGPlayback:
             labels=labels
         )
 
-    def stream(self):
+    def stream(self, running):
         block_size = int(self.sample_rate)
         total_blocks = self.n_samples // block_size
         print(f"Streaming {total_blocks} blocks of {block_size} samples...")
 
         for i in range(total_blocks):
-            block = self.data[i * block_size:(i + 1) * block_size, :]
-            self.__ftc.putData(block)
-            print(f"Block {i+1}/{total_blocks} sent.")
-            time.sleep(1.0)  # Simulate real-time streaming
+            if running.is_set():
+                block = self.data[i * block_size:(i + 1) * block_size, :]
+                self.__ftc.putData(block)
+                print(f"Block {i+1}/{total_blocks} sent.")
+                time.sleep(1.0)  # Simulate real-time streaming
+            else:
+                print('Playback aborted')
+                return
 
         print("All blocks sent.")
+        self.playback_finished.on_change()
 
     def disconnect(self):
         self.__ftc.disconnect()
         print("Disconnected from FieldTrip buffer.")
+
+    def getAllData(self):
+        return self.data
 
 if __name__ == "__main__":
     import sys

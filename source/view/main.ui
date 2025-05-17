@@ -64,10 +64,10 @@
          </size>
         </property>
         <property name="toolTip">
-         <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;EEG Kanäle, die für die Berechnung mit einbezogen werden sollen&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+         <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;EEG channels, that are used as input for the calculations&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
         </property>
         <property name="text">
-         <string>Aktive EEG-Kanäle:</string>
+         <string>Active EEG channels:</string>
         </property>
         <property name="scaledContents">
          <bool>false</bool>
@@ -470,6 +470,7 @@
       </item>
      </layout>
     </item>
+
     <item>
      <widget class="Line" name="line_2">
       <property name="orientation">
@@ -477,6 +478,99 @@
       </property>
      </widget>
     </item>
+
+    <item>
+        <layout class="QHBoxLayout" name="horizontalLayout">
+            <item>
+                <widget class="QLabel" name="input_label">
+                    <property name="sizePolicy">
+                        <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+                    <horstretch>0</horstretch>
+                    <verstretch>0</verstretch>
+                    </sizepolicy>
+                    </property>
+                    <property name="minimumSize">
+                    <size>
+                    <width>50</width>
+                    <height>50</height>
+                    </size>
+                    </property>
+                    <property name="text">
+                    <string>Ready for receiving live EEG Data</string>
+                    </property>
+                    <property name="scaledContents">
+                    <bool>false</bool>
+                    </property>
+                    <property name="wordWrap">
+                    <bool>false</bool>
+                    </property>
+                    <property name="margin">
+                    <number>0</number>
+                    </property>
+                </widget>
+            </item>
+            <item>
+                <widget class="QLabel" name="input_label_value">
+                    <property name="sizePolicy">
+                        <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+                    <horstretch>0</horstretch>
+                    <verstretch>0</verstretch>
+                    </sizepolicy>
+                    </property>
+                    <property name="minimumSize">
+                    <size>
+                    <width>50</width>
+                    <height>50</height>
+                    </size>
+                    </property>
+                    <property name="text">
+                    <string>-</string>
+                    </property>
+                    <property name="scaledContents">
+                    <bool>false</bool>
+                    </property>
+                    <property name="wordWrap">
+                    <bool>false</bool>
+                    </property>
+                    <property name="margin">
+                    <number>0</number>
+                    </property>
+                </widget>
+            </item>
+            <item>
+                <widget class="QPushButton" name="unload_data_button">
+                    <property name="text">
+                    <string>Unload file</string>
+                    </property>
+                    <property name="flat">
+                    <bool>false</bool>
+                    </property>
+                </widget>
+            </item>
+            <item>
+                <spacer name="horizontalSpacer_5">
+                    <property name="orientation">
+                    <enum>Qt::Horizontal</enum>
+                    </property>
+                    <property name="sizeHint" stdset="0">
+                    <size>
+                    <width>40</width>
+                    <height>20</height>
+                    </size>
+                    </property>
+                </spacer>
+            </item>
+        </layout>
+    </item>
+    
+    <item>
+     <widget class="Line" name="line_2">
+      <property name="orientation">
+       <enum>Qt::Horizontal</enum>
+      </property>
+     </widget>
+    </item>
+
     <item>
         <layout class="QHBoxLayout" name="alpha_horizontalLayout" stretch="1">
       <item>

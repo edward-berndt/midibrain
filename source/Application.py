@@ -13,6 +13,7 @@ from rtmidi._rtmidi import InvalidPortError
 
 import midi
 from Processing import Processing, CalibrationThread
+from Playback import EEGPlayback
 
 """
 Author: Edward Berndt
@@ -23,6 +24,7 @@ gui = None
 cal_gui = None
 ft_gui = None
 proc = None
+playback = None
 
 # for connection to FieldTrip
 host_name = 'localhost'
@@ -43,6 +45,8 @@ timer = QTimer()
 processing_thread = None
 proc_run = threading.Event()
 cal_thread = None
+playback_thread = None
+playback_run = threading.Event()
 
 
 def on_new_values(val_a, val_b):
@@ -110,11 +114,34 @@ def save_data():
 
 
 def load_data():
-    # TODO: implement data loading
+    global playback, proc, host_name, port_nr, gui
+    stop_processing()
     file_name = QFileDialog.getOpenFileName(gui, "Open recorded EEG data", filter='Text File (*.csv)', initialFilter='Text File (*.csv)')[0]
-    if name:
-        np.genfromtxt(file_name)
+    playback = EEGPlayback(file_name, host_name, port_nr)
+    playback.load_data()
+    playback.connect()
+    playback.playback_finished.on_change += stop_playback
+    data = playback.getAllData()
+    proc.calibrate_from_recording(data)
+    connect()
+
+    gui.input_label_value.setText(os.path.basename(file_name))
+    gui.input_label_value.setVisible(True)
+    gui.input_label.setText('Playback from file:')
+    gui.unload_data_button.setVisible(True)
+
+    show_dialog('EEG recording loaded. To start playback, press Start.')
     
+def unload_data():
+    global playback, gui
+    stop_processing()
+    playback.disconnect()
+    playback = None
+
+    gui.input_label_value.setText('')
+    gui.input_label_value.setVisible(False)
+    gui.input_label.setText('Ready to receive live EEG data')
+    gui.unload_data_button.setVisible(False)
 
 
 def init_graph():
@@ -155,12 +182,22 @@ def update_graph():
 def init_channel_boxes():
     global gui, proc
     gui.cb_channel_all.clicked.connect(on_all_channels_checked)
+    connect_channel_boxes()
     check_all_channels(False)
+    update_channel_boxes()
+
+
+def connect_channel_boxes():
     cont = gui.channel_cb_container
     cb_list = cont.findChildren(QCheckBox)
     for i in range(0, len(cb_list)):
         cb_list[i].stateChanged.connect(lambda checked, a=i: on_channel_checked(cb_list[a], a))
-    update_channel_boxes()
+
+def disconnect_channel_boxes():
+    cont = gui.channel_cb_container
+    cb_list = cont.findChildren(QCheckBox)
+    for i in range(0, len(cb_list)):
+        cb_list[i].stateChanged.disconnect()
 
 
 def update_channel_boxes():
@@ -185,7 +222,6 @@ def on_channel_checked(cb, chan_nr):
     else:
         proc.deactivate_channel(chan_nr)
         gui.cb_channel_all.setChecked(False)
-    proc.recalibrate()
 
 
 @pyqtSlot()
@@ -199,11 +235,18 @@ def on_all_channels_checked():
 
 
 def check_all_channels(check):
-    cont = gui.channel_cb_container
+    disconnect_channel_boxes()
+    cont = gui.channel_cb_container 
     cb_list = cont.findChildren(QCheckBox)
     for cb in cb_list:
         if cb.isEnabled():
             cb.setChecked(check)
+    all_chans = np.arange(proc.n_channels)
+    print('n_chans: ' + str(proc.n_channels))
+    print('all_chans: ' + str(all_chans))
+    proc.set_active_channels(all_chans)
+    proc.recalibrate()
+    connect_channel_boxes()
 
 
 def init_buttons():
@@ -213,6 +256,7 @@ def init_buttons():
     gui.beta_map_button.clicked.connect(on_beta_map)
     gui.calibrate_button.clicked.connect(show_calibration)
     gui.apply_button.clicked.connect(update_spinboxes)
+    gui.unload_data_button.clicked.connect(unload_data)
     cal_gui.a_calib_button.clicked.connect(lambda: calibrate(True, False))
     cal_gui.b_calib_button.clicked.connect(lambda: calibrate(False, True))
     ft_gui.connect_button.clicked.connect(on_connect)
@@ -240,9 +284,14 @@ def connect():
 
 @pyqtSlot()
 def on_start():
-    global gui, proc, processing_thread
+    global gui, proc
     if proc_run.is_set():
+        stop_playback()
         stop_processing()
+        return
+    
+    if playback is not None:
+        start_playback()
     else:
         start_processing()
 
@@ -264,6 +313,20 @@ def stop_processing():
         processing_thread = None
         gui.start_button.setText('Start')
 
+def start_playback():
+    global playback, playback_thread
+    playback_run.set()
+    playback_thread = threading.Thread(target=playback.stream, args=(playback_run,))
+    playback_thread.daemon = True
+    playback_thread.start()
+    start_processing()
+
+def stop_playback():
+    global playback_thread
+    if playback_thread is not None:
+        playback_run.clear()
+        playback_thread.join()
+        playback_thread = None
 
 @pyqtSlot()
 def on_alpha_map():
@@ -335,10 +398,16 @@ def change_average(av):
 def init_menubar():
     gui.ft_item.triggered.connect(show_ft_config)
     gui.item_save.triggered.connect(save_data)
+    gui.item_open.triggered.connect(load_data)
 
 
 def main():
     global app, gui, cal_gui, ft_gui, proc
+
+    #dirname = os.path.dirname(__file__)
+    #demo_buffer_path = os.path.join(dirname, '../FieldTrip/demo_buffer.exe')
+    #os.startfile(demo_buffer_path)
+
     app = QApplication(sys.argv)
     dir_path = os.path.dirname(os.path.realpath(__file__))
     gui = loadUi(dir_path + "/view/main.ui")
@@ -348,10 +417,14 @@ def main():
     proc = Processing()
     proc.new_values_event.on_change += on_new_values
     proc.connection_changed.on_change += on_connection_changed
+
     try:
         midi.open_midi_port()
     except InvalidPortError:
         show_dialog("MIDI port could not be opened. Please install the LoopBe1 MIDI driver.")
+
+    gui.input_label_value.setVisible(False)
+    gui.unload_data_button.setVisible(False)
     init_buttons()
     init_menubar()
     init_channel_boxes()
