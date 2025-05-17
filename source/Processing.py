@@ -6,6 +6,10 @@ from scipy.integrate import simpson
 
 import FieldTrip
 
+class ConnectionStatus:
+    NOT_CONNECTED = 0
+    WAIT_FOR_HEADER = 1
+    CONNECTED = 2
 
 class Processing:
     """
@@ -16,6 +20,7 @@ class Processing:
     def __init__(self):
         # FieldTrip related variables
         self.__ftc = FieldTrip.Client()
+        self.connection_status = ConnectionStatus.NOT_CONNECTED
         self.sfreq = 0
         self.block_size = 512
         self.sample_n = 0
@@ -72,16 +77,23 @@ class Processing:
             self.__ftc.connect(name, port)  # might throw IOError
         except IOError:
             raise
-        header = self.__ftc.getHeader()
-        if header is None:
-            raise IOError("Connection to FieldTrip failed: no Header")
-        self.sfreq = header.fSample
-        self.block_size = self.sfreq
-        self.n_channels = header.nChannels
-        if self.raw_data.size == 0:
-            self.raw_data = self.raw_data.reshape((0, self.n_channels))
-        self.connection_changed.on_change(self.is_connected())
-        print("connected to FieldTrip")
+
+        self.connection_status = ConnectionStatus.WAIT_FOR_HEADER
+        self.connection_changed.on_change(ConnectionStatus.WAIT_FOR_HEADER)
+        print("connected to FieldTrip. Waiting for header...")
+
+        header = None
+        while header is None:
+            header = self.__ftc.getHeader()
+            if header is not None:
+                self.sfreq = header.fSample
+                self.block_size = self.sfreq
+                self.n_channels = header.nChannels
+                if self.raw_data.size == 0:
+                    self.raw_data = self.raw_data.reshape((0, self.n_channels))
+                    self.connection_status = ConnectionStatus.CONNECTED
+                self.connection_changed.on_change(ConnectionStatus.CONNECTED)
+                print("header received. Ready for processing.")
 
     def disconnect(self):
         """
@@ -90,7 +102,7 @@ class Processing:
         """
         self.__ftc.disconnect()
         self.reset_fieldtrip_vars()
-        self.connection_changed.on_change(self.is_connected())
+        self.connection_changed.on_change(ConnectionStatus.NOT_CONNECTED)
         print("disconnected from FieldTrip")
 
     def set_glide(self, glide):
@@ -129,8 +141,6 @@ class Processing:
         chans = np.delete(self.active_channels, i)
         self.set_active_channels(chans)
 
-    def is_connected(self):
-        return self.__ftc.isConnected
 
     def get_vals_per_sec(self):
         """
@@ -287,6 +297,22 @@ class Processing:
         self.cal_beta = data
         self.recalibrate()       
 
+class ConnectionThread(QThread):
+    sig_connection_status = pyqtSignal(int) # ConnectionStatus
+
+    def __init__(self, processing, hostname, port_nr, parent=None):
+        super(ConnectionThread, self).__init__(parent)
+        self.processing = processing
+        self.hostname = hostname
+        self.port_nr = port_nr
+        self.start()
+
+    def run(self):
+        self.processing.connection_changed.on_change += self.on_connection_changed
+        self.processing.connect(self.hostname, self.port_nr)
+
+    def on_connection_changed(self, status):
+        self.sig_connection_status.emit(status)
 
 class CalibrationThread(QThread):
     sig_calibration_progress = pyqtSignal(int)
@@ -321,7 +347,6 @@ class CalibrationThread(QThread):
             if has_new:
                 progress = int(100 / minute * i)
                 self.sig_calibration_progress.emit(progress)
-                # self.calibration_progress_changed.on_change(int(100 / minute * i))  # calculate percentage
                 i += 1
 
         cal_data = proc.raw_data[-int(minute * proc.block_size):, :]

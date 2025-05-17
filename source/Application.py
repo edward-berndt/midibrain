@@ -12,7 +12,7 @@ from PyQt5.uic import loadUi
 from rtmidi._rtmidi import InvalidPortError
 
 import midi
-from Processing import Processing, CalibrationThread
+from Processing import Processing, CalibrationThread, ConnectionThread, ConnectionStatus
 from Playback import EEGPlayback
 
 """
@@ -42,6 +42,7 @@ beta_control_nr = 2
 
 # Threading related
 timer = QTimer()
+connection_thread = None
 processing_thread = None
 proc_run = threading.Event()
 cal_thread = None
@@ -54,16 +55,6 @@ def on_new_values(val_a, val_b):
     b = midi.to_midi(val_b, proc.beta_min, proc.beta_max)
     midi.send_control_change(a, 1)
     midi.send_control_change(b, 2)
-
-
-def on_connection_changed(is_conn):
-    if is_conn:
-        gui.calibrate_button.setEnabled(True)
-    else:
-        gui.calibrate_button.setEnabled(False)
-    update_labels()
-    update_channel_boxes()
-    update_spinboxes()
 
 
 def show_dialog(text):
@@ -92,6 +83,30 @@ def calibrate(alpha, beta):
     cal_thread.sig_calibration_progress.connect(update_progbar)
     cal_thread.start()
 
+@pyqtSlot(int)
+def on_connection_changed(status):
+    print(f'connection status: {status}')
+    if status == ConnectionStatus.NOT_CONNECTED:
+        gui.start_button.setEnabled(False)
+        gui.calibrate_button.setEnabled(False)
+        ft_gui.connect_button.setText('Connect')
+        return
+    if status == ConnectionStatus.WAIT_FOR_HEADER:
+        gui.start_button.setEnabled(False)
+        gui.calibrate_button.setEnabled(False)
+        gui.input_label_value.setText('No input')
+        gui.status_fieldtrip_label.setText('Waiting for input')
+        ft_gui.connect_button.setText('Disconnect')
+        return
+    if status == ConnectionStatus.CONNECTED:
+        gui.start_button.setEnabled(True)
+        gui.calibrate_button.setEnabled(True)
+        gui.status_fieldtrip_label.setText('Connected')
+        ft_gui.connect_button.setText('Disconnect')
+        update_labels()
+        update_channel_boxes()
+        update_spinboxes()
+        return
 
 @pyqtSlot(int)
 def update_progbar(val):
@@ -101,7 +116,6 @@ def update_progbar(val):
         cal_gui.a_calib_button.setEnabled(True)
         cal_gui.b_calib_button.setEnabled(True)
         winsound.MessageBeep(winsound.MB_OK)
-
 
 def save_data():
     stop_processing()
@@ -125,9 +139,7 @@ def load_data():
     proc.calibrate_from_recording(data)
     connect()
 
-    gui.input_label_value.setText(os.path.basename(file_name))
-    gui.input_label_value.setVisible(True)
-    gui.input_label.setText('Playback from file:')
+    gui.input_label_value.setText('playback from ' + os.path.basename(file_name))
     gui.unload_data_button.setVisible(True)
 
     show_dialog('EEG recording loaded. To start playback, press Start.')
@@ -138,14 +150,13 @@ def unload_data():
     playback.disconnect()
     playback = None
 
-    gui.input_label_value.setText('')
-    gui.input_label_value.setVisible(False)
-    gui.input_label.setText('Ready to receive live EEG data')
+    gui.input_label_value.setText('live EEG data')
     gui.unload_data_button.setVisible(False)
 
 
 def init_graph():
     global gui, proc, timer, alpha_graph, beta_graph
+
     pg.setConfigOptions(antialias=True)
     alpha_graph = pg.PlotWidget(name="alpha plot")
     beta_graph = pg.PlotWidget(name="beta plot")
@@ -169,7 +180,7 @@ def init_graph():
 
 def update_graph():
     global alpha_graph, beta_graph
-    if proc.is_connected():
+    if proc.connection_status == ConnectionStatus.CONNECTED:
         alpha_plot["raw"].setData(proc.raw_alphas)
         alpha_plot["averaged"].setData(proc.av_alphas)
         beta_plot["raw"].setData(proc.raw_betas)
@@ -210,7 +221,7 @@ def update_channel_boxes():
         else:
             cb_list[i].setChecked(False)
             cb_list[i].setEnabled(False)
-    gui.cb_channel_all.setEnabled(proc.is_connected())
+    gui.cb_channel_all.setEnabled(proc.connection_status == ConnectionStatus.CONNECTED)
     gui.cb_channel_all.setChecked(False)
 
 
@@ -242,30 +253,15 @@ def check_all_channels(check):
         if cb.isEnabled():
             cb.setChecked(check)
     all_chans = np.arange(proc.n_channels)
-    print('n_chans: ' + str(proc.n_channels))
-    print('all_chans: ' + str(all_chans))
     proc.set_active_channels(all_chans)
     proc.recalibrate()
     connect_channel_boxes()
 
 
-def init_buttons():
-    global gui, cal_gui
-    gui.start_button.clicked.connect(on_start)
-    gui.alpha_map_button.clicked.connect(on_alpha_map)
-    gui.beta_map_button.clicked.connect(on_beta_map)
-    gui.calibrate_button.clicked.connect(show_calibration)
-    gui.apply_button.clicked.connect(update_spinboxes)
-    gui.unload_data_button.clicked.connect(unload_data)
-    cal_gui.a_calib_button.clicked.connect(lambda: calibrate(True, False))
-    cal_gui.b_calib_button.clicked.connect(lambda: calibrate(False, True))
-    ft_gui.connect_button.clicked.connect(on_connect)
-
-
 @pyqtSlot()
-def on_connect():
+def on_connect_button_pressed():
     global host_name, port_nr
-    if proc.is_connected():
+    if proc.connection_status == ConnectionStatus.CONNECTED or proc.connection_status == ConnectionStatus.WAIT_FOR_HEADER:
         proc.disconnect()
         ft_gui.connect_button.setText('Connect')
     else:
@@ -275,12 +271,13 @@ def on_connect():
 
 
 def connect():
-    try:
-        proc.connect(host_name, port_nr)
-        ft_gui.connect_button.setText('Disconnect')
-    except IOError:
-        show_dialog('Connection to FieldTrip failed')
+    global connection_thread, host_name, port_nr
+    connection_thread = ConnectionThread(proc, host_name, port_nr)
+    connection_thread.sig_connection_status.connect(on_connection_changed)
+    connection_thread.start()
 
+def on_connection_error():
+    show_dialog('Connection to FieldTrip failed')
 
 @pyqtSlot()
 def on_start():
@@ -300,8 +297,7 @@ def start_processing():
     global proc, processing_thread
     gui.start_button.setText('Stop')
     proc_run.set()
-    processing_thread = threading.Thread(target=proc.start_processing, args=(proc_run,))
-    processing_thread.daemon = True
+    processing_thread = threading.Thread(target=proc.start_processing, args=(proc_run,), daemon=True)
     processing_thread.start()
 
 
@@ -329,7 +325,7 @@ def stop_playback():
         playback_thread = None
 
 @pyqtSlot()
-def on_alpha_map():
+def on_alpha_map_pressed():
     global gui
     mapping_thread = threading.Thread(target=midi.start_mapping, args=[alpha_control_nr])
     mapping_thread.daemon = True
@@ -342,7 +338,7 @@ def on_alpha_map():
 
 
 @pyqtSlot()
-def on_beta_map():
+def on_beta_map_pressed():
     global gui
     mapping_thread = threading.Thread(target=midi.start_mapping, args=[beta_control_nr])
     mapping_thread.daemon = True
@@ -356,20 +352,21 @@ def on_beta_map():
 
 def update_labels():
     global gui, proc
-    if proc.is_connected():
+    print(f'connection status: {proc.connection_status}')
+    if proc.connection_status == ConnectionStatus.CONNECTED:
         gui.status_fieldtrip_label.setText('Connected')
         gui.status_sfreq_label.setText(str(int(proc.sfreq)))
         gui.status_channels_label.setText(str(proc.n_channels))
-    else:
+        ft_gui.connect_button.setText('Disconnect')
+        if not playback_run.is_set():
+            gui.input_label_value.setText('live EEG data')
+    if proc.connection_status == ConnectionStatus.NOT_CONNECTED:
         gui.status_fieldtrip_label.setText('Not Connected')
         gui.status_sfreq_label.setText('-')
         gui.status_channels_label.setText('-')
+        gui.input_label_value.setText('No input')
+        ft_gui.connect_button.setText('Connect')
     gui.val_per_sec_label.setText(str(proc.get_vals_per_sec()))
-
-
-def init_spinboxes():
-    global gui
-    update_spinboxes()
 
 
 def update_spinboxes():
@@ -400,6 +397,22 @@ def init_menubar():
     gui.item_save.triggered.connect(save_data)
     gui.item_open.triggered.connect(load_data)
 
+def init_buttons():
+    global gui, cal_gui, ft_gui, proc
+    gui.start_button.clicked.connect(on_start)
+    gui.start_button.setEnabled(False)
+    gui.alpha_map_button.clicked.connect(on_alpha_map_pressed)
+    gui.beta_map_button.clicked.connect(on_beta_map_pressed)
+    gui.calibrate_button.clicked.connect(show_calibration)
+    gui.calibrate_button.setEnabled(False)
+    gui.apply_button.clicked.connect(update_spinboxes)
+    gui.unload_data_button.clicked.connect(unload_data)
+    gui.unload_data_button.setVisible(False)
+
+    cal_gui.a_calib_button.clicked.connect(lambda: calibrate(True, False))
+    cal_gui.b_calib_button.clicked.connect(lambda: calibrate(False, True))
+    ft_gui.connect_button.clicked.connect(on_connect_button_pressed)
+
 
 def main():
     global app, gui, cal_gui, ft_gui, proc
@@ -416,20 +429,17 @@ def main():
     gui.show()
     proc = Processing()
     proc.new_values_event.on_change += on_new_values
-    proc.connection_changed.on_change += on_connection_changed
 
     try:
         midi.open_midi_port()
     except InvalidPortError:
         show_dialog("MIDI port could not be opened. Please install the LoopBe1 MIDI driver.")
 
-    gui.input_label_value.setVisible(False)
-    gui.unload_data_button.setVisible(False)
     init_buttons()
     init_menubar()
     init_channel_boxes()
     update_labels()
-    init_spinboxes()
+    update_spinboxes()
     init_graph()
     connect()
 
