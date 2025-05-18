@@ -11,6 +11,27 @@ class ConnectionStatus:
     WAIT_FOR_HEADER = 1
     CONNECTED = 2
 
+class PowerValues:
+    raw_alpha = np.array([])
+    raw_beta = np.array([])
+    av_alpha = np.array([])
+    av_beta = np.array([])
+
+    def __init__(self, raw_alpha=np.array([]), raw_beta=np.array([]), av_alpha=np.array([]), av_beta=np.array([])):
+        self.raw_alpha = raw_alpha
+        self.raw_beta = raw_beta
+        self.av_alpha = av_alpha
+        self.av_beta = av_beta
+    
+    def append(self, new_values):
+        self.raw_alpha = np.append(self.raw_alpha, new_values.raw_alpha)
+        self.raw_beta = np.append(self.raw_beta, new_values.raw_beta)
+        self.av_alpha = np.append(self.av_alpha, new_values.av_alpha)
+        self.av_beta = np.append(self.av_beta, new_values.av_beta)
+
+    def __str__(self):
+        return 'raw_alpha: {} raw_beta: {} av_alpha: {} av_beta: {}'.format(self.raw_alpha, self.raw_beta, self.av_alpha, self.av_beta)
+
 class Processing:
     """
     Provides methods for the EEG signal processing
@@ -25,7 +46,7 @@ class Processing:
         self.block_size = 512
         self.sample_n = 0
         self.n_channels = 0
-        self.active_channels = np.array([], dtype=int)
+        self.active_channels = []
 
         # general Processing variables
         self._glide = 1
@@ -33,10 +54,7 @@ class Processing:
 
         # data arrays
         self.raw_data = np.array([])
-        self.raw_alphas = np.array([])
-        self.raw_betas = np.array([])
-        self.av_alphas = np.array([])
-        self.av_betas = np.array([])
+        self.power_values = PowerValues()
 
         # raw data from the calibration gets saved here and can be used for recalibration
         self.cal_alpha = np.array([])
@@ -50,6 +68,8 @@ class Processing:
 
         # gets raised if new alpha/beta values are calculated
         self.new_values_event = Events()
+        self.channels_changed = Events()
+        self.header_changed = Events()
         self.connection_changed = Events()
         self.calibration_progress_changed = Events()
 
@@ -58,41 +78,44 @@ class Processing:
         self.block_size = 512
         self.sample_n = 0
         self.n_channels = 0
-        self.active_channels = np.array([], dtype=int)
+        self.active_channels = []
 
     def clear_vals(self):
-        self.raw_alphas = np.array([])
-        self.raw_betas = np.array([])
-        self.av_alphas = np.array([])
-        self.av_betas = np.array([])
+        self.power_values = PowerValues()
+        self.raw_data = np.array([])
 
-    def connect(self, name, port):
+    def connect(self, host_name, port, connect_run):
         """
         Connects the FieldTrip Client to given hostname and port
-        :param name: name of the host
+        :param host_name: host_name of the host
         :param port: port number
         :return: True if connection was successful, False if not
         """
-        try:
-            self.__ftc.connect(name, port)  # might throw IOError
-        except IOError:
-            raise
-
-        self.connection_status = ConnectionStatus.WAIT_FOR_HEADER
-        self.connection_changed.on_change(ConnectionStatus.WAIT_FOR_HEADER)
-        print("connected to FieldTrip. Waiting for header...")
+        connected = False
+        while not connected:
+            if not connect_run.is_set():
+                print('aborting connection process.')
+                break
+            try:
+                print(f'Trying to connect to filedtrip on {host_name} port {port}')
+                self.__ftc.connect(host_name, port)  # might throw IOError
+                connected = True
+                self.set_connection_status(ConnectionStatus.WAIT_FOR_HEADER)
+                print("connected to FieldTrip. Waiting for header...")
+            except IOError:
+                print('connection to Fieldtrip failed. Trying again...')
+                pass
 
         header = None
         while header is None:
-            header = self.__ftc.getHeader()
+            if not connect_run.is_set():
+                print('aborting connection process.')
+                break
+            header = self.get_header()
             if header is not None:
-                self.sfreq = header.fSample
-                self.block_size = self.sfreq
-                self.n_channels = header.nChannels
                 if self.raw_data.size == 0:
                     self.raw_data = self.raw_data.reshape((0, self.n_channels))
-                    self.connection_status = ConnectionStatus.CONNECTED
-                self.connection_changed.on_change(ConnectionStatus.CONNECTED)
+                self.set_connection_status(ConnectionStatus.CONNECTED)
                 print("header received. Ready for processing.")
 
     def disconnect(self):
@@ -102,8 +125,12 @@ class Processing:
         """
         self.__ftc.disconnect()
         self.reset_fieldtrip_vars()
-        self.connection_changed.on_change(ConnectionStatus.NOT_CONNECTED)
+        self.set_connection_status(ConnectionStatus.NOT_CONNECTED)
         print("disconnected from FieldTrip")
+
+    def set_connection_status(self, status):
+        self.connection_status = status
+        self.connection_changed.on_change(status)
 
     def set_glide(self, glide):
         self._glide = glide
@@ -123,10 +150,13 @@ class Processing:
             self.active_channels = chans
         elif max(chans) >= self.n_channels or min(chans) < 0:
             raise ValueError('Values for chans must be within range from 0 to ' + str(self.n_channels - 1))
+        elif np.array_equal(self.active_channels, chans):
+            return
         else:
             self.active_channels = chans
             self.recalibrate()
-        print('active channels: ' + str(self.active_channels))
+            self.channels_changed.on_change(chans)
+        print(f'active channels: {self.active_channels}')
 
     def activate_channel(self, chan_nr):
         if chan_nr >= self.n_channels or chan_nr < 0:
@@ -150,15 +180,32 @@ class Processing:
         val_per_sec = int(self.sfreq / (self.block_size / self._glide))
         return val_per_sec
 
+    def get_header(self) -> FieldTrip.Header:
+        header = self.__ftc.getHeader()
+        if header is None:
+            return [], False
+        if header.fSample != self.sfreq or header.nChannels != self.n_channels:
+            self.sfreq = header.fSample
+            self.block_size = self.sfreq
+            self.n_channels = header.nChannels
+            self.header_changed.on_change(header)
+        if len(self.active_channels) > header.nChannels:
+            chans = np.where(self.active_channels < header.nChannels, self.active_channels)
+            self.set_active_channels(chans)
+        return header
+
     def get_data(self):
         """
         retrieves the next block of data from the FieldTrip Client
         :return: array of data with the length of set blocksize
         """
         if not self.__ftc.isConnected:
+            self.set_connection_status(ConnectionStatus.NOT_CONNECTED)
             return [], False
 
-        header = self.__ftc.getHeader()
+        header = self.get_header()
+        if header is None:
+            return [], False
         if header.nSamples >= self.sample_n + self.block_size:
             stop = self.sample_n + self.block_size - 1
             d = self.__ftc.getData([self.sample_n, stop])
@@ -215,7 +262,7 @@ class Processing:
             self.raw_data = np.concatenate((self.raw_data, new_samples), axis=0)
         return d, has_new
 
-    def process_block(self, d, raw_alphas, raw_betas):
+    def process_block(self, d, raw_alphas, raw_betas) -> PowerValues:
         """
         processes the given block d. calculates its alpha and beta power raw as well as averaged
         and stores it in the given arrays
@@ -224,10 +271,6 @@ class Processing:
         :param d: (data) the block
         :return: the averaged alpha and beta value
         """
-        raw_alpha_power = None
-        raw_beta_power = None
-        av_alpha_power = None
-        av_beta_power = None
         if len(self.active_channels) != 0 and len(d[:, 0]) >= self.block_size:
             raw_alpha_power = self.get_band_power(d, 8, 13)
             raw_beta_power = self.get_band_power(d, 14, 27)
@@ -237,7 +280,9 @@ class Processing:
 
             av_alpha_power = np.mean(raw_alphas[-self._average:])
             av_beta_power = np.mean(raw_betas[-self._average:])
-        return raw_alpha_power, raw_beta_power, av_alpha_power, av_beta_power
+            return PowerValues(raw_alpha_power, raw_beta_power, av_alpha_power, av_beta_power)
+        else:
+            return None
 
     def start_processing(self, running):
         """
@@ -251,13 +296,11 @@ class Processing:
         while running.is_set():
             d, has_new = self.get_next_block()
             if has_new:
-                raw_alpha, raw_beta, av_alpha, av_beta = self.process_block(d, self.raw_alphas, self.raw_betas)
-                if av_alpha is not None:
-                    self.raw_alphas = np.append(self.raw_alphas, raw_alpha)
-                    self.raw_betas = np.append(self.raw_betas, raw_beta)
-                    self.av_alphas = np.append(self.av_alphas, av_alpha)
-                    self.av_betas = np.append(self.av_betas, av_beta)
-                    self.new_values_event.on_change(av_alpha, av_beta)
+                new_values = self.process_block(d, self.power_values.raw_alpha, self.power_values.raw_beta)
+                if new_values is not None:
+                    self.power_values.append(new_values)
+                    print(f'calculated new power values: {new_values}')
+                    self.new_values_event.on_change(new_values)
 
         print("processing finished")
 
@@ -267,7 +310,6 @@ class Processing:
         with the current glide and average settings
         :return:
         """
-
         av_alphas = []
         av_betas = []
         cals = [self.cal_alpha, self.cal_beta]
@@ -279,16 +321,16 @@ class Processing:
                     start = int((self.block_size * (i - 1)) / self._glide)
                     stop = int(start + self.block_size)
                     block = cal[start:stop, :]
-                    raw_alpha, raw_beta, av_alpha, av_beta = self.process_block(block, raw_alphas, raw_betas)
-                    if raw_alpha is not None:
-                        raw_alphas.append(raw_alpha)
-                        raw_betas.append(raw_beta)
-                        av_alphas.append(av_alpha)
-                        av_betas.append(av_beta)
-        if len(av_alphas) != 0:
+                    power_values = self.process_block(block, raw_alphas, raw_betas)
+                    if power_values is not None:
+                        raw_alphas.append(power_values.raw_alpha)
+                        raw_betas.append(power_values.raw_beta)
+                        av_alphas.append(power_values.av_alpha)
+                        av_betas.append(power_values.av_beta)
+        if av_alphas:
             self.alpha_max = max(av_alphas)
             self.alpha_min = min(av_alphas)
-        if len(av_betas) != 0:
+        if av_betas:
             self.beta_max = max(av_betas)
             self.beta_min = min(av_betas)
 
@@ -300,19 +342,36 @@ class Processing:
 class ConnectionThread(QThread):
     sig_connection_status = pyqtSignal(int) # ConnectionStatus
 
-    def __init__(self, processing, hostname, port_nr, parent=None):
+    def __init__(self, processing, hostname, port_nr, connect_run, parent=None):
         super(ConnectionThread, self).__init__(parent)
         self.processing = processing
         self.hostname = hostname
         self.port_nr = port_nr
-        self.start()
+        self.connect_run = connect_run
 
     def run(self):
         self.processing.connection_changed.on_change += self.on_connection_changed
-        self.processing.connect(self.hostname, self.port_nr)
+        self.processing.connect(self.hostname, self.port_nr, self.connect_run)
 
     def on_connection_changed(self, status):
         self.sig_connection_status.emit(status)
+
+
+class ProcessingThread(QThread):
+    sig_calculated_values = pyqtSignal(PowerValues)
+
+    def __init__(self, processing, proc_run, parent=None):
+        super(ProcessingThread, self).__init__(parent)
+        self.processing = processing
+        self.proc_run = proc_run
+
+    def run(self):
+        self.processing.new_values_event.on_change += self.on_new_values
+        self.processing.start_processing(self.proc_run)
+    
+    def on_new_values(self, new_values):
+        self.sig_calculated_values.emit(new_values)
+
 
 class CalibrationThread(QThread):
     sig_calibration_progress = pyqtSignal(int)

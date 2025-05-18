@@ -12,7 +12,7 @@ from PyQt5.uic import loadUi
 from rtmidi._rtmidi import InvalidPortError
 
 import midi
-from Processing import Processing, CalibrationThread, ConnectionThread, ConnectionStatus
+from Processing import *
 from Playback import EEGPlayback
 
 """
@@ -41,21 +41,14 @@ alpha_control_nr = 1
 beta_control_nr = 2
 
 # Threading related
-timer = QTimer()
+# timer = QTimer()
 connection_thread = None
 processing_thread = None
-proc_run = threading.Event()
 cal_thread = None
 playback_thread = None
+connect_run = threading.Event()
+proc_run = threading.Event()
 playback_run = threading.Event()
-
-
-def on_new_values(val_a, val_b):
-    a = midi.to_midi(val_a, proc.alpha_min, proc.alpha_max)
-    b = midi.to_midi(val_b, proc.beta_min, proc.beta_max)
-    midi.send_control_change(a, 1)
-    midi.send_control_change(b, 2)
-
 
 def show_dialog(text):
     box = QMessageBox()
@@ -85,28 +78,20 @@ def calibrate(alpha, beta):
 
 @pyqtSlot(int)
 def on_connection_changed(status):
-    print(f'connection status: {status}')
-    if status == ConnectionStatus.NOT_CONNECTED:
-        gui.start_button.setEnabled(False)
-        gui.calibrate_button.setEnabled(False)
-        ft_gui.connect_button.setText('Connect')
-        return
-    if status == ConnectionStatus.WAIT_FOR_HEADER:
-        gui.start_button.setEnabled(False)
-        gui.calibrate_button.setEnabled(False)
-        gui.input_label_value.setText('No input')
-        gui.status_fieldtrip_label.setText('Waiting for input')
-        ft_gui.connect_button.setText('Disconnect')
-        return
-    if status == ConnectionStatus.CONNECTED:
-        gui.start_button.setEnabled(True)
-        gui.calibrate_button.setEnabled(True)
-        gui.status_fieldtrip_label.setText('Connected')
-        ft_gui.connect_button.setText('Disconnect')
-        update_labels()
-        update_channel_boxes()
-        update_spinboxes()
-        return
+    print(f'[on_connection_changed] connection status: {status}')
+    update_buttons()
+    update_labels()
+    update_channel_boxes()
+    update_spinboxes()
+
+@pyqtSlot(PowerValues)
+def on_new_values(new_values):
+    print(f'received new power values: {new_values}')
+    a = midi.to_midi(new_values.av_alpha, proc.alpha_min, proc.alpha_max)
+    b = midi.to_midi(new_values.av_beta, proc.beta_min, proc.beta_max)
+    midi.send_control_change(a, 1)
+    midi.send_control_change(b, 2)
+    update_graph()
 
 @pyqtSlot(int)
 def update_progbar(val):
@@ -136,10 +121,12 @@ def load_data():
     playback.connect()
     playback.playback_finished.on_change += stop_playback
     data = playback.getAllData()
+    proc.clear_vals()
+    proc.reset_fieldtrip_vars()
     proc.calibrate_from_recording(data)
     connect()
 
-    gui.input_label_value.setText('playback from ' + os.path.basename(file_name))
+    gui.input_label_value.setText(f'playback from {os.path.basename(file_name)}')
     gui.unload_data_button.setVisible(True)
 
     show_dialog('EEG recording loaded. To start playback, press Start.')
@@ -167,24 +154,24 @@ def init_graph():
     al.insertWidget(0, alpha_graph, 8)
     bl.insertWidget(0, beta_graph, 8)
     alpha_graph.getPlotItem().setTitle("Alpha waves")
+    alpha_graph.getPlotItem().vb.setLimits(xMin=0, yMin=0)
     beta_graph.getPlotItem().setTitle("Beta waves")
+    beta_graph.getPlotItem().vb.setLimits(xMin=0, yMin=0)
     alpha_plot["raw"] = alpha_graph.getPlotItem().plot(pen=QColor(155, 155, 155), width=10)
     alpha_plot["averaged"] = alpha_graph.getPlotItem().plot(pen='b', width=10)
     beta_plot["raw"] = beta_graph.getPlotItem().plot(pen=QColor(155, 155, 155), width=50)
     beta_plot["averaged"] = beta_graph.getPlotItem().plot(pen=QColor(234, 98, 0), width=50)
     alpha_graph.setYRange(proc.alpha_min, proc.alpha_max)
     beta_graph.setYRange(proc.beta_min, proc.beta_max)
-    timer.timeout.connect(update_graph)
-    timer.start(40)
 
 
 def update_graph():
     global alpha_graph, beta_graph
     if proc.connection_status == ConnectionStatus.CONNECTED:
-        alpha_plot["raw"].setData(proc.raw_alphas)
-        alpha_plot["averaged"].setData(proc.av_alphas)
-        beta_plot["raw"].setData(proc.raw_betas)
-        beta_plot["averaged"].setData(proc.av_betas)
+        alpha_plot["raw"].setData(proc.power_values.raw_alpha)
+        alpha_plot["averaged"].setData(proc.power_values.av_alpha)
+        beta_plot["raw"].setData(proc.power_values.raw_beta)
+        beta_plot["averaged"].setData(proc.power_values.av_beta)
         alpha_graph.setYRange(proc.alpha_min - proc.alpha_min * 1.1, proc.alpha_max * 1.1)
         beta_graph.setYRange(proc.beta_min - proc.beta_min * 1.1, proc.beta_max * 1.1)
         app.processEvents()
@@ -194,7 +181,6 @@ def init_channel_boxes():
     global gui, proc
     gui.cb_channel_all.clicked.connect(on_all_channels_checked)
     connect_channel_boxes()
-    check_all_channels(False)
     update_channel_boxes()
 
 
@@ -218,11 +204,12 @@ def update_channel_boxes():
     for i in range(0, len(cb_list)):
         if proc.n_channels > i:
             cb_list[i].setEnabled(True)
+            cb_list[i].setChecked(i in proc.active_channels)
         else:
             cb_list[i].setChecked(False)
             cb_list[i].setEnabled(False)
     gui.cb_channel_all.setEnabled(proc.connection_status == ConnectionStatus.CONNECTED)
-    gui.cb_channel_all.setChecked(False)
+    gui.cb_channel_all.setChecked(len(proc.active_channels) == proc.n_channels)
 
 
 @pyqtSlot(QCheckBox, int)
@@ -240,30 +227,16 @@ def on_all_channels_checked():
     global gui, proc
     cb_all = gui.cb_channel_all
     if cb_all.isChecked():
-        check_all_channels(True)
+        proc.set_active_channels(np.arange(proc.n_channels))
     else:
-        check_all_channels(False)
-
-
-def check_all_channels(check):
-    disconnect_channel_boxes()
-    cont = gui.channel_cb_container 
-    cb_list = cont.findChildren(QCheckBox)
-    for cb in cb_list:
-        if cb.isEnabled():
-            cb.setChecked(check)
-    all_chans = np.arange(proc.n_channels)
-    proc.set_active_channels(all_chans)
-    proc.recalibrate()
-    connect_channel_boxes()
+        proc.set_active_channels([])
 
 
 @pyqtSlot()
 def on_connect_button_pressed():
     global host_name, port_nr
     if proc.connection_status == ConnectionStatus.CONNECTED or proc.connection_status == ConnectionStatus.WAIT_FOR_HEADER:
-        proc.disconnect()
-        ft_gui.connect_button.setText('Connect')
+        disconnect()
     else:
         host_name = ft_gui.hostname_input.text()
         port_nr = int(ft_gui.portnr_input.text())
@@ -272,9 +245,22 @@ def on_connect_button_pressed():
 
 def connect():
     global connection_thread, host_name, port_nr
-    connection_thread = ConnectionThread(proc, host_name, port_nr)
+    if connection_thread is not None and connection_thread.isRunning():
+        connect_run.clear()
+        connection_thread.wait()
+    connect_run.set()
+    connection_thread = ConnectionThread(proc, host_name, port_nr, connect_run)
     connection_thread.sig_connection_status.connect(on_connection_changed)
     connection_thread.start()
+
+def disconnect():
+    if connection_thread is not None and connection_thread.isRunning():
+        connect_run.clear()
+        connection_thread.wait()
+    if processing_thread is not None and processing_thread.isRunning():
+        stop_processing()
+    proc.disconnect()
+    on_connection_changed(proc.connection_status)
 
 def on_connection_error():
     show_dialog('Connection to FieldTrip failed')
@@ -294,10 +280,11 @@ def on_start():
 
 
 def start_processing():
-    global proc, processing_thread
+    global proc, processing_thread, proc_run
     gui.start_button.setText('Stop')
     proc_run.set()
-    processing_thread = threading.Thread(target=proc.start_processing, args=(proc_run,), daemon=True)
+    processing_thread = ProcessingThread(proc, proc_run)
+    processing_thread.sig_calculated_values.connect(on_new_values)
     processing_thread.start()
 
 
@@ -305,9 +292,9 @@ def stop_processing():
     global processing_thread
     if processing_thread is not None:
         proc_run.clear()
-        processing_thread.join()
+        processing_thread.wait()
         processing_thread = None
-        gui.start_button.setText('Start')
+        gui.start_button.setText('Start') 
 
 def start_playback():
     global playback, playback_thread
@@ -321,8 +308,8 @@ def stop_playback():
     global playback_thread
     if playback_thread is not None:
         playback_run.clear()
-        playback_thread.join()
         playback_thread = None
+        stop_processing()
 
 @pyqtSlot()
 def on_alpha_map_pressed():
@@ -349,10 +336,21 @@ def on_beta_map_pressed():
         midi.stop_mapping()
         gui.alpha_map_button.setEnabled(True)
 
+def on_header_changed():
+    gui.status_sfreq_label.setText(str(int(proc.sfreq)))
+    gui.status_channels_label.setText(str(proc.n_channels))
+    update_channel_boxes()
+
+def update_buttons():
+    if proc.connection_status == ConnectionStatus.CONNECTED:
+        gui.start_button.setEnabled(True)
+        gui.calibrate_button.setEnabled(True)
+    else:
+        gui.start_button.setEnabled(False)
+        gui.calibrate_button.setEnabled(False)
 
 def update_labels():
     global gui, proc
-    print(f'connection status: {proc.connection_status}')
     if proc.connection_status == ConnectionStatus.CONNECTED:
         gui.status_fieldtrip_label.setText('Connected')
         gui.status_sfreq_label.setText(str(int(proc.sfreq)))
@@ -360,6 +358,12 @@ def update_labels():
         ft_gui.connect_button.setText('Disconnect')
         if not playback_run.is_set():
             gui.input_label_value.setText('live EEG data')
+    if proc.connection_status == ConnectionStatus.WAIT_FOR_HEADER:
+        gui.status_fieldtrip_label.setText('Waiting for input')
+        gui.status_sfreq_label.setText('-')
+        gui.status_channels_label.setText('-')
+        gui.input_label_value.setText('No input')
+        ft_gui.connect_button.setText('Disconnect')
     if proc.connection_status == ConnectionStatus.NOT_CONNECTED:
         gui.status_fieldtrip_label.setText('Not Connected')
         gui.status_sfreq_label.setText('-')
@@ -428,7 +432,8 @@ def main():
     ft_gui = loadUi(dir_path + "/view/fieldtrip_dialog.ui")
     gui.show()
     proc = Processing()
-    proc.new_values_event.on_change += on_new_values
+    proc.header_changed.on_change += lambda header: on_header_changed()
+    proc.channels_changed.on_change += lambda chans: update_channel_boxes()
 
     try:
         midi.open_midi_port()
