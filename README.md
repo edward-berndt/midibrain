@@ -20,3 +20,18 @@ So far, MIDIBrain has only been tested on Windows Machines. Hence, only `.exe`s 
 
 This software uses the FieldTrip buffer open source library. See http:/www.fieldtriptoolbox.org for details.
 The FieldTrip buffer is used under the GNU-GPL License, Version 3.
+
+### Install required packages
+run `pip install -r requirements.txt`
+
+### Run the program
+1. Run `FieldTrip/demobuffer.exe`
+2. Run python `source/midibrain.py`
+
+### Demo (Playback mode)
+Don't have an EEG? No problem. To see what MIDIBrain does, you can playback previously recorded EEG data.
+For that you will first have to run the `FieldTrip/demobuffer.exe`.
+Now in the MIDIBrain application, go to *File > Replay recording*.
+For demo purposes you can open the file `example-eeg-data/eeg_rec.csv`.
+Once the file has been successfully loaded into MIDIBrain, you can press *Start* and the playback will begin.
+You can adjust the blocksize and the moving average, and map the Alpha and Beta channel to whatever MIDI-controllable parameter in your DAW that you like.
