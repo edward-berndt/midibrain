@@ -116,7 +116,8 @@ class Processing:
                 if self.raw_data.size == 0:
                     self.raw_data = self.raw_data.reshape((0, self.n_channels))
                 self.set_connection_status(ConnectionStatus.CONNECTED)
-                print("header received. Ready for processing.")
+                print('header received. Ready for processing.')
+                print(f'[header] channels: {header.nChannels} sfreq: {header.fSample}')
 
     def disconnect(self):
         """
@@ -180,10 +181,10 @@ class Processing:
         val_per_sec = int(self.sfreq / (self.block_size / self._glide))
         return val_per_sec
 
-    def get_header(self) -> FieldTrip.Header:
+    def get_header(self):
         header = self.__ftc.getHeader()
         if header is None:
-            return [], False
+            return None
         if header.fSample != self.sfreq or header.nChannels != self.n_channels:
             self.sfreq = header.fSample
             self.block_size = self.sfreq
