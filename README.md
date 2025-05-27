@@ -30,6 +30,8 @@ run `pip install -r requirements.txt`
 - MIDIBrain will try to conect to the FieldTrip buffer via localhost:1972 per default. You can change the hostname and port under *Configuration > FieldTrip connection*
 - After successful connection to the buffer, the *Start* button will be enabled and you will be able to select the EEG channels that you want to use the data from.
 
+![midibrain](https://github.com/user-attachments/assets/8766a2e1-7a26-4732-91f1-27ab6a7c7a80)
+
 ### Calibration
 - In order for the Mapping of the wave power to MIDI values to work properly, a calibration is needed.
 - In the bottom left corner, press *Calibrate*
@@ -45,7 +47,11 @@ run `pip install -r requirements.txt`
 - Press the button again to end the mapping
 
 ### Adjusting the stepsize and moving average
-- TODO:
+- The stepsize tells by how many samples the calculation window is moved. The blocksize is always equal to the sampling frequency, so for a sample frequency of 512, a stepsize of 1/2 block means that after each calculation the window is moved by 256 samples.
+The smaller the stepsize, the more values are calculated per second and the greater the time-resolution of the curve becomes. Depending on the computing power of you machine, a too small step-size might lead to higher latency.
+
+- The moving average adjusts the smoothness of the output curve. The higher the moving average, the more resilient the curve is to outliers in the measurements. The raw calculated power values are represented by the gray line in the graphs, while the output values are represented by the colored line.
+If the moving average is set to 1, the raw curve is equal to the smoothed curve.
 
 ### Demo (Playback mode)
 Don't have an EEG? No problem. To see what MIDIBrain does, you can playback previously recorded EEG data.
