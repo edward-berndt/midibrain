@@ -40,6 +40,7 @@ run `pip install -r requirements.txt`
 - During the calibration the minimum and maximum values of the wave powers are measured, and saved for the ongoing session (A new calibration will overwrite the previous values)
 
 ### MIDI mapping
+- Make sure you have installed the LoopBe1 MIDI Driver and configured your DAW to receive MIDI Input from it
 - On the right side of the screen there is a button for each band (Alpha and Beta) that starts the MIDI Mapping
 - During Mapping, MIDIBrain will send continuous control change messages to be received by a DAW. Think of it as turning a control knob on a midi controller, to map it to a specific parameter.
 - Channel 0, CC1 for Alphawaves and channel 0, CC2 for Betawaves

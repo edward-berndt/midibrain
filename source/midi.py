@@ -32,6 +32,7 @@ def send_control_change(value, control_number=1):
     """sends a MIDI control change message with the given value from 0-127"""
     cchange = [cc_statusbyte, control_number, value]  # controlchange message
     midi_out.send_message(cchange)
+    print(f'sent MIDI CC message: control_number {control_number}, value {value}')
 
 
 def to_midi(x, min_, max_):

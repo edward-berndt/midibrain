@@ -314,8 +314,7 @@ def stop_playback():
 @pyqtSlot()
 def on_alpha_map_pressed():
     global gui
-    mapping_thread = threading.Thread(target=midi.start_mapping, args=[alpha_control_nr])
-    mapping_thread.daemon = True
+    mapping_thread = threading.Thread(target=midi.start_mapping, args=[alpha_control_nr], daemon=True)
     if gui.alpha_map_button.isChecked():
         gui.beta_map_button.setEnabled(False)
         mapping_thread.start()
